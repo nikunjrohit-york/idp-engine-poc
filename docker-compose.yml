@@ -1,0 +1,66 @@
+# Separate stack from Delphi and Rancher Desktop.
+# Host ports stay off 5432 (delphi-bundle-postgres) and 6379.
+# `docker compose up` only creates idp-poc-* containers. It does not stop other containers.
+name: idp-poc
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: idp-poc-postgres
+    environment:
+      POSTGRES_USER: idp
+      POSTGRES_PASSWORD: idp
+      POSTGRES_DB: idp_poc
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U idp -d idp_poc']
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: idp-poc-redis
+    # BullMQ needs noeviction, or Redis can silently drop queued jobs.
+    command: ['redis-server', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: idp-poc-api
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      APP_ROLE: all
+      PIPELINE_MODE: sync
+      PHI_MODE: 'false'
+      # Service DNS on this compose network, not the host and not Delphi.
+      DATABASE_URL: postgresql://idp:idp@postgres:5432/idp_poc
+      REDIS_URL: redis://redis:6379
+      STORAGE_DRIVER: local
+      STORAGE_DIR: /app/.data
+      ENGINES_ENABLED: fake
+      ENGINE_DEFAULT: fake
+      CLASSIFY_OCR: none
+    volumes:
+      - appdata:/app/.data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Apply migrations, then start. Idempotent, so a restart is safe.
+    command: ['sh', '-c', './node_modules/.bin/prisma migrate deploy && node dist/main.js']
+
+volumes:
+  pgdata:
+  appdata:
