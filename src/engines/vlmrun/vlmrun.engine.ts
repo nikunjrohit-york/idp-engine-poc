@@ -6,7 +6,7 @@ import {
   type EngineResult,
   type ExtractionEngine,
 } from '../engine.port';
-import type { VlmPrediction, VlmRunClient } from './vlmrun.client';
+import { vlmDomainFor, type VlmPrediction, type VlmRunClient } from './vlmrun.client';
 import { mapVlmRunResponse } from './vlmrun.mapper';
 
 export interface VlmRunEngineOptions {
@@ -44,6 +44,7 @@ export class VlmRunEngine implements ExtractionEngine {
       let prediction: VlmPrediction = await this.client.generate({
         fileId,
         jsonSchema: req.schema,
+        domain: vlmDomainFor(req.form.id),
       });
       if (!TERMINAL.has(prediction.status)) {
         const id = prediction.id;

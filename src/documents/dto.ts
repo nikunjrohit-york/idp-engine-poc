@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 import { ENGINE_NAMES } from '../engines/engine.port';
 
 const ENGINE_CSV = new RegExp(`^(${ENGINE_NAMES.join('|')})(,(${ENGINE_NAMES.join('|')}))*$`);
@@ -45,17 +45,6 @@ export const UPLOAD_BODY_SCHEMA = {
     },
   },
 };
-
-export class RunExtractionDto {
-  @ApiProperty({ enum: ENGINE_NAMES })
-  @IsIn(ENGINE_NAMES)
-  engine!: string;
-
-  @ApiPropertyOptional({ description: 'Defaults to the document formType' })
-  @IsOptional()
-  @IsString()
-  formType?: string;
-}
 
 export class CompareQueryDto {
   @ApiPropertyOptional()

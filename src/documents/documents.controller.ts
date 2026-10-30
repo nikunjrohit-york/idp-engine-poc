@@ -14,19 +14,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiConsumes, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantId } from '../common/tenant.decorator';
 import { EngineRegistry } from '../engines/engine-registry';
 import { FormRegistry } from '../forms/form-registry';
 import { buildJsonSchema } from '../forms/json-schema.builder';
 import { CompareService } from './compare.service';
 import { DocumentsService } from './documents.service';
-import { CompareQueryDto, RunExtractionDto, UPLOAD_BODY_SCHEMA, UploadDocumentDto } from './dto';
-
-const TENANT_HEADER = { name: 'x-tenant-id', required: true, description: 'Tenant id (dev auth)' };
+import { CompareQueryDto, UPLOAD_BODY_SCHEMA, UploadDocumentDto } from './dto';
 
 @ApiTags('documents')
-@ApiHeader(TENANT_HEADER)
 @Controller('v1/documents')
 export class DocumentsController {
   constructor(
@@ -38,7 +35,7 @@ export class DocumentsController {
   @HttpCode(202)
   @ApiOperation({
     summary:
-      'Upload any document (PDF, image, Word); auto-detect the form unless formType is given; run engines',
+      'Upload a document, run engines, and return each extraction with fields/groups/other/values (same shape as GET /v1/extractions/:id)',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: UPLOAD_BODY_SCHEMA })
@@ -60,19 +57,6 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Document with all its extraction runs' })
   get(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.documents.getDocument(tenantId, id);
-  }
-
-  @Post(':id/extractions')
-  @HttpCode(202)
-  @ApiOperation({
-    summary: 'Run another engine on an existing document (reuses an identical earlier run)',
-  })
-  extract(
-    @TenantId() tenantId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RunExtractionDto,
-  ) {
-    return this.documents.extractAgain(tenantId, id, dto.engine, dto.formType);
   }
 
   @Get(':id/compare')
@@ -98,7 +82,6 @@ export class DocumentsController {
 }
 
 @ApiTags('extractions')
-@ApiHeader(TENANT_HEADER)
 @Controller('v1/extractions')
 export class ExtractionsController {
   constructor(private readonly documents: DocumentsService) {}

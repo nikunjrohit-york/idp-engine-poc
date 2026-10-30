@@ -112,7 +112,7 @@ Field keys:
 | Forms                 | `FormDefinition` (data, Zod-validated)            | built-in TS + JSON files               | `FORMS_DIR`                                                                |
 | Object storage        | `StoragePort`                                     | local, S3 (SSE-KMS)                    | `STORAGE_DRIVER`                                                           |
 | Execution             | `ExtractionDispatcher`                            | inline, BullMQ                         | `PIPELINE_MODE`, `APP_ROLE`                                                |
-| Tenant / auth         | `@TenantId()`                                     | `x-tenant-id` (dev)                    | host guard adapter                                                         |
+| Tenant / auth         | `@TenantId()`                                     | fixed `demo` (header optional)         | host guard adapter                                                         |
 
 Schema engines (VLM Run, Meibel, fake) share one walker (`src/engines/schema-result.ts`) for scalars, rows and other values. Each adapter only supplies its provenance lookup. **A fifth engine** means:
 
@@ -132,23 +132,20 @@ pnpm prisma:deploy
 pnpm start:dev                   # http://localhost:3000/docs
 
 pnpm samples                     # samples/: cms1500, ub04, booking-sheet (.pdf + .docx), intake, letter, card
-curl -s -X POST localhost:3000/v1/documents -H 'x-tenant-id: demo' -F file=@samples/booking-sheet.synthetic.docx
-#   → { formType: "BOOKING_SHEET", classification: { source: "classifier", score: 1 }, conversion: "docx-text", extractions: [...] }
-curl -s localhost:3000/v1/extractions/<id> -H 'x-tenant-id: demo'
-#   → { fields: [...], groups: { procedures: [[...], [...]] }, other: [...], values: { patient: {...}, procedures: [...] } }
+curl -s -X POST localhost:3000/v1/documents -F file=@samples/booking-sheet.synthetic.docx
+#   → { formType: "BOOKING_SHEET", extractions: [{ id, status, fields, groups, other, values }] }
 ```
 
 **Real engines:** fill the matching `.env` block (see [docs/MANUAL-SETUP.md](docs/MANUAL-SETUP.md)), then set `ENGINES_ENABLED=fake,textract,vlmrun,meibel`. **Bake-off on one file:** upload with `-F engines=textract,vlmrun,meibel`, then call `GET /v1/documents/<id>/compare`. **Queue mode:** `PIPELINE_MODE=queue`, running `APP_ROLE=api` plus N × `APP_ROLE=worker` from the same image.
 
 ## 5. API
 
-All `/v1/*` routes except the catalog need `x-tenant-id`.
+Requests do not need a tenant header. This POC stores every document under the tenant `demo`.
 
 | Method | Path                                          | What                                                                                                                                                                               |
 | ------ | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/v1/documents`                               | multipart `file`, optional `formType` (otherwise auto-detected), optional `engines`. Returns 202 with `documentId`, `formType`, `classification`, `conversion` and the extractions |
+| POST   | `/v1/documents`                               | multipart `file`, optional `formType` (otherwise auto-detected), optional `engines`. Returns 202 with `documentId`, classification, and each extraction including `fields`, `groups`, `other`, `values` |
 | GET    | `/v1/documents/:id`                           | document, classification, conversion, every run (status, cost, latency)                                                                                                            |
-| POST   | `/v1/documents/:id/extractions`               | `{ engine, formType? }`: another engine, or re-extract as a different form                                                                                                         |
 | GET    | `/v1/documents/:id/compare`                   | latest run per engine side by side, including rows and other values (matched by label)                                                                                             |
 | GET    | `/v1/documents/:id/pages/:n`                  | page PNG (bboxes are 0..1 of this image)                                                                                                                                           |
 | GET    | `/v1/extractions/:id`                         | `fields` (scalars), `groups` (rows of cells), `other` (any other value), `values` (the form's JSON shape, ready for prefill)                                                       |

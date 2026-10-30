@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
-import { detectMime, extensionFor, sha256 } from '../common/util';
+import { detectMime, extensionFor, sha256, sleep } from '../common/util';
 import { ConverterService } from '../conversion/converter.service';
 import { EngineRegistry } from '../engines/engine-registry';
 import type { EngineName } from '../engines/engine.port';
@@ -129,9 +129,11 @@ export class DocumentsService {
     }
 
     const form = this.forms.get(formType ?? doc.formType);
-    const extractions: ExtractionSummary[] = [];
-    for (const engine of engineNames)
-      extractions.push(await this.requestExtraction(tenantId, doc, engine, form));
+    const extractions = [];
+    for (const engine of engineNames) {
+      const run = await this.requestExtraction(tenantId, doc, engine, form);
+      extractions.push(await this.getExtraction(tenantId, run.id, run.reused));
+    }
     return {
       documentId: doc.id,
       deduplicated,
@@ -163,13 +165,6 @@ export class DocumentsService {
     return classifyText(texts.join('\n'), this.forms.list());
   }
 
-  async extractAgain(tenantId: string, documentId: string, engine: string, formType?: string) {
-    const doc = await this.getDocumentRow(tenantId, documentId);
-    const form = this.forms.get(formType ?? doc.formType);
-    const name = this.engines.resolve(engine)[0]!;
-    return this.requestExtraction(tenantId, doc, name, form);
-  }
-
   /**
    * Same engine + form version + schema + file -> reuse the earlier run instead of paying again
    * (plan 04 §1 requestHash rule). An in-flight run is also returned instead of starting a second.
@@ -186,7 +181,13 @@ export class DocumentsService {
       where: { tenantId, requestHash, status: { in: ['QUEUED', 'RUNNING', 'SUCCEEDED'] } },
       orderBy: { createdAt: 'desc' },
     });
-    if (existing) return summary(existing, true);
+    if (existing) {
+      const row =
+        existing.status === 'SUCCEEDED'
+          ? existing
+          : await this.waitUntilTerminal(existing.id);
+      return summary(row, true);
+    }
 
     const created = await this.prisma.extraction.create({
       data: {
@@ -202,6 +203,17 @@ export class DocumentsService {
     await this.dispatcher.dispatch(created.id);
     const fresh = await this.prisma.extraction.findUniqueOrThrow({ where: { id: created.id } });
     return summary(fresh, false);
+  }
+
+  /** Second upload of the same file waits for the in-flight run instead of returning empty fields. */
+  private async waitUntilTerminal(id: string) {
+    const deadline = Date.now() + 6 * 60_000;
+    for (;;) {
+      const row = await this.prisma.extraction.findUniqueOrThrow({ where: { id } });
+      if (row.status === 'SUCCEEDED' || row.status === 'FAILED') return row;
+      if (Date.now() >= deadline) return row;
+      await sleep(500);
+    }
   }
 
   async getDocument(tenantId: string, id: string) {
@@ -244,7 +256,7 @@ export class DocumentsService {
    * One run with its values: `fields` (scalars), `groups` (rows of cells, e.g. Box 24) and
    * `other` (any other labelled value), plus a flat `values` map path -> value for easy use.
    */
-  async getExtraction(tenantId: string, id: string) {
+  async getExtraction(tenantId: string, id: string, reused = false) {
     const ex = await this.prisma.extraction.findFirst({
       where: { id, tenantId },
       include: { fields: true },
@@ -286,7 +298,7 @@ export class DocumentsService {
       .map(view);
 
     return {
-      ...summary(ex, false),
+      ...summary(ex, reused),
       documentId: ex.documentId,
       formType: ex.formType,
       formVersion: ex.formVersion,
@@ -300,12 +312,6 @@ export class DocumentsService {
       other,
       values: valuesTree(ex.fields),
     };
-  }
-
-  private async getDocumentRow(tenantId: string, id: string): Promise<Document> {
-    const doc = await this.prisma.document.findFirst({ where: { id, tenantId } });
-    if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
-    return doc;
   }
 }
 

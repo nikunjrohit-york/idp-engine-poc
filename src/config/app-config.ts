@@ -98,9 +98,9 @@ export const envSchema = Joi.object({
   }),
   VLMRUN_BASE_URL: Joi.string().uri().default('https://api.vlm.run'),
   VLMRUN_MODEL: Joi.string().default('vlm-1'),
-  VLMRUN_DETAIL: Joi.string().valid('lo', 'hi', 'auto').default('hi'),
+  VLMRUN_DETAIL: Joi.string().valid('lo', 'hi', 'auto').default('auto'),
   VLMRUN_POLL_MS: Joi.number().integer().min(250).default(2000),
-  VLMRUN_TIMEOUT_MS: Joi.number().integer().min(5000).default(120000),
+  VLMRUN_TIMEOUT_MS: Joi.number().integer().min(5000).default(300000),
   VLMRUN_CONFIDENCE_MAP: Joi.string().default('{"high":95,"medium":75,"low":40}'),
   VLMRUN_BAA_CONFIRMED: Joi.boolean().default(false),
 

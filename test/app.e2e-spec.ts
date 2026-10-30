@@ -87,7 +87,7 @@ describe('IDP POC (e2e, fake engine)', () => {
       source: 'classifier',
       hadText: true,
     });
-    const ex = await extraction(res.extractions[0].id);
+    const ex = res.extractions[0];
     expect(ex.status).toBe('SUCCEEDED');
     expect(ex.fields.find((f: { path: string }) => f.path === 'insured.id')).toMatchObject({
       canonicalKey: 'insured.id',
@@ -194,7 +194,8 @@ describe('IDP POC (e2e, fake engine)', () => {
       .get(`/v1/documents/${res.documentId}`)
       .set('x-tenant-id', `${tenant}-other`)
       .expect(404);
-    await http().get(`/v1/documents/${res.documentId}`).expect(400);
+    // No header uses the POC tenant, which does not own this e2e document.
+    await http().get(`/v1/documents/${res.documentId}`).expect(404);
   });
 
   it('rejects disabled engines, unknown forms, and unsupported files (txt, rtf, legacy doc)', async () => {

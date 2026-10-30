@@ -3,7 +3,7 @@ import { CMS1500, INSURANCE_CARD, PATIENT_INTAKE } from '../../forms/definitions
 import { buildJsonSchema } from '../../forms/json-schema.builder';
 import type { EngineRequest } from '../engine.port';
 import type { FetchFn } from '../http';
-import { VlmRunClient } from './vlmrun.client';
+import { vlmDomainFor, VlmRunClient } from './vlmrun.client';
 import { VlmRunEngine } from './vlmrun.engine';
 import { mapVlmRunResponse } from './vlmrun.mapper';
 
@@ -29,7 +29,11 @@ function client(fetchFn: FetchFn) {
 
 describe('VlmRunClient', () => {
   it('always sends allow_logging/training/retention=false, grounding, confidence, temperature 0, pinned model', () => {
-    const body = client(vi.fn()).generateBody({ fileId: 'f1', jsonSchema: {} });
+    const body = client(vi.fn()).generateBody({
+      fileId: 'f1',
+      jsonSchema: { type: 'object', properties: { dob: { type: ['string', 'null'] } } },
+      domain: 'healthcare.claims-processing',
+    });
     expect(body.metadata).toMatchObject({
       allow_logging: false,
       allow_training: false,
@@ -40,8 +44,14 @@ describe('VlmRunClient', () => {
       confidence: true,
       temperature: 0,
       detail: 'hi',
+      json_schema: { type: 'object', properties: { dob: { type: 'string' } } },
     });
-    expect(body).toMatchObject({ model: 'vlm-1', batch: true, file_id: 'f1' });
+    expect(body).toMatchObject({
+      model: 'vlm-1',
+      batch: true,
+      file_id: 'f1',
+      domain: 'healthcare.claims-processing',
+    });
   });
 
   it('sends the bearer key and retries 429 honouring Retry-After', async () => {
@@ -49,7 +59,11 @@ describe('VlmRunClient', () => {
       .fn<FetchFn>()
       .mockResolvedValueOnce(json({}, 429, { 'retry-after': '1' }))
       .mockResolvedValueOnce(json({ id: 'p1', status: 'pending' }));
-    const res = await client(fetchFn).generate({ fileId: 'f1', jsonSchema: {} });
+    const res = await client(fetchFn).generate({
+      fileId: 'f1',
+      jsonSchema: {},
+      domain: 'healthcare.claims-processing',
+    });
     expect(res.id).toBe('p1');
     expect(fetchFn).toHaveBeenCalledTimes(2);
     const init = fetchFn.mock.calls[0]![1]!;
@@ -64,6 +78,11 @@ describe('VlmRunClient', () => {
     expect(err).toMatchObject({ code: 'AUTH_CONFIG', retryable: false });
     expect(String(err)).not.toContain('JANE');
     expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps claim forms to healthcare.claims-processing', () => {
+    expect(vlmDomainFor('CMS1500')).toBe('healthcare.claims-processing');
+    expect(vlmDomainFor('GENERIC')).toBe('document.invoice');
   });
 });
 
