@@ -52,7 +52,7 @@ export class DocumentsService {
    * Upload -> detect type -> sha256 dedupe -> convert (Word -> PDF) -> store original, normalized
    * and page PNGs -> classify (unless formType given) -> one extraction per requested engine.
    */
-  async upload(tenantId: string, bytes: Buffer, formType?: string, enginesCsv?: string) {
+  async upload(bytes: Buffer, formType?: string, enginesCsv?: string) {
     const mime = detectMime(bytes);
     if (!mime) {
       throw new UnsupportedMediaTypeException({
@@ -65,17 +65,17 @@ export class DocumentsService {
     const hash = sha256(bytes);
 
     let doc = await this.prisma.document.findUnique({
-      where: { tenantId_sha256: { tenantId, sha256: hash } },
+      where: { sha256: hash },
     });
     const deduplicated = !!doc;
     if (!doc) {
       const id = randomUUID();
       const normalized = await this.converter.normalize(bytes, mime);
-      const storageKey = storageKeys.original(tenantId, id, extensionFor(mime));
+      const storageKey = storageKeys.original(id, extensionFor(mime));
       await this.storage.put(storageKey, bytes, mime);
       let normalizedKey: string | null = null;
       if (normalized.conversion !== 'none') {
-        normalizedKey = storageKeys.normalized(tenantId, id);
+        normalizedKey = storageKeys.normalized(id);
         await this.storage.put(normalizedKey, normalized.bytes, normalized.mimeType);
       }
       const pages = await this.rasterizer.rasterize(normalized.bytes, normalized.mimeType);
@@ -83,10 +83,9 @@ export class DocumentsService {
 
       const pageRows = [];
       for (const p of pages) {
-        const key = storageKeys.page(tenantId, id, p.pageNumber);
+        const key = storageKeys.page(id, p.pageNumber);
         await this.storage.put(key, p.png, 'image/png');
         pageRows.push({
-          tenantId,
           pageNumber: p.pageNumber,
           storageKey: key,
           sha256: sha256(p.png),
@@ -97,7 +96,6 @@ export class DocumentsService {
       doc = await this.prisma.document.create({
         data: {
           id,
-          tenantId,
           sha256: hash,
           mimeType: mime,
           sizeBytes: bytes.length,
@@ -131,8 +129,8 @@ export class DocumentsService {
     const form = this.forms.get(formType ?? doc.formType);
     const extractions = [];
     for (const engine of engineNames) {
-      const run = await this.requestExtraction(tenantId, doc, engine, form);
-      extractions.push(await this.getExtraction(tenantId, run.id, run.reused));
+      const run = await this.requestExtraction(doc, engine, form);
+      extractions.push(await this.getExtraction(run.id, run.reused));
     }
     return {
       documentId: doc.id,
@@ -170,7 +168,6 @@ export class DocumentsService {
    * (plan 04 §1 requestHash rule). An in-flight run is also returned instead of starting a second.
    */
   private async requestExtraction(
-    tenantId: string,
     doc: Document,
     engine: EngineName,
     form: FormDefinition,
@@ -178,7 +175,7 @@ export class DocumentsService {
     const { schemaHash } = buildJsonSchema(form);
     const requestHash = sha256([engine, form.id, form.version, schemaHash, doc.sha256].join('|'));
     const existing = await this.prisma.extraction.findFirst({
-      where: { tenantId, requestHash, status: { in: ['QUEUED', 'RUNNING', 'SUCCEEDED'] } },
+      where: { requestHash, status: { in: ['QUEUED', 'RUNNING', 'SUCCEEDED'] } },
       orderBy: { createdAt: 'desc' },
     });
     if (existing) {
@@ -191,7 +188,6 @@ export class DocumentsService {
 
     const created = await this.prisma.extraction.create({
       data: {
-        tenantId,
         documentId: doc.id,
         engine,
         formType: form.id,
@@ -216,9 +212,9 @@ export class DocumentsService {
     }
   }
 
-  async getDocument(tenantId: string, id: string) {
+  async getDocument(id: string) {
     const doc = await this.prisma.document.findFirst({
-      where: { id, tenantId },
+      where: { id },
       include: { extractions: { orderBy: { createdAt: 'desc' } } },
     });
     if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
@@ -246,8 +242,8 @@ export class DocumentsService {
     };
   }
 
-  async getPage(tenantId: string, documentId: string, pageNumber: number): Promise<Buffer> {
-    const page = await this.prisma.page.findFirst({ where: { tenantId, documentId, pageNumber } });
+  async getPage(documentId: string, pageNumber: number): Promise<Buffer> {
+    const page = await this.prisma.page.findFirst({ where: { documentId, pageNumber } });
     if (!page) throw new NotFoundException({ code: 'PAGE_NOT_FOUND' });
     return this.storage.get(page.storageKey);
   }
@@ -256,9 +252,9 @@ export class DocumentsService {
    * One run with its values: `fields` (scalars), `groups` (rows of cells, e.g. Box 24) and
    * `other` (any other labelled value), plus a flat `values` map path -> value for easy use.
    */
-  async getExtraction(tenantId: string, id: string, reused = false) {
+  async getExtraction(id: string, reused = false) {
     const ex = await this.prisma.extraction.findFirst({
-      where: { id, tenantId },
+      where: { id },
       include: { fields: true },
     });
     if (!ex) throw new NotFoundException({ code: 'EXTRACTION_NOT_FOUND' });

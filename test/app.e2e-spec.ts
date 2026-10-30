@@ -37,15 +37,14 @@ Object.assign(process.env, {
 
 describe('IDP POC (e2e, fake engine)', () => {
   let app: INestApplication;
-  const tenant = `e2e-${Date.now()}`;
   const http = () => request(app.getHttpServer());
   const upload = (file: Buffer, name: string, fields: Record<string, string> = {}) => {
-    const req = http().post('/v1/documents').set('x-tenant-id', tenant);
+    const req = http().post('/v1/documents');
     for (const [k, v] of Object.entries(fields)) req.field(k, v);
     return req.attach('file', file, name);
   };
   const extraction = async (id: string) =>
-    (await http().get(`/v1/extractions/${id}`).set('x-tenant-id', tenant).expect(200)).body;
+    (await http().get(`/v1/extractions/${id}`).expect(200)).body;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -124,10 +123,7 @@ describe('IDP POC (e2e, fake engine)', () => {
     const ex = await extraction(res.extractions[0].id);
     expect(ex.groups.procedures).toHaveLength(2);
     expect(ex.fields.find((f: { path: string }) => f.path === 'latexAllergy').value).toBe(false);
-    const page = await http()
-      .get(`/v1/documents/${res.documentId}/pages/1`)
-      .set('x-tenant-id', tenant)
-      .expect(200);
+    const page = await http().get(`/v1/documents/${res.documentId}/pages/1`).expect(200);
     expect(page.headers['content-type']).toBe('image/png');
   });
 
@@ -176,26 +172,10 @@ describe('IDP POC (e2e, fake engine)', () => {
     const first = (await upload(makeCms1500Pdf(), 'claim.pdf').expect(202)).body;
     expect(first.deduplicated).toBe(true);
     expect(first.extractions[0].reused).toBe(true);
-    const cmp = (
-      await http()
-        .get(`/v1/documents/${first.documentId}/compare`)
-        .set('x-tenant-id', tenant)
-        .expect(200)
-    ).body;
+    const cmp = (await http().get(`/v1/documents/${first.documentId}/compare`).expect(200)).body;
     expect(cmp.engines).toEqual(['fake']);
     expect(cmp.totals[0]).toMatchObject({ groupRows: 2, otherValues: 2 });
     expect(cmp.rows.some((r: { key: string }) => r.key === 'serviceLines[0].cptHcpcs')).toBe(true);
-  });
-
-  it('tenant isolation', async () => {
-    const res = (await upload(makeSyntheticPdf(['tenant isolation sample']), 'x.pdf').expect(202))
-      .body;
-    await http()
-      .get(`/v1/documents/${res.documentId}`)
-      .set('x-tenant-id', `${tenant}-other`)
-      .expect(404);
-    // No header uses the POC tenant, which does not own this e2e document.
-    await http().get(`/v1/documents/${res.documentId}`).expect(404);
   });
 
   it('rejects disabled engines, unknown forms, and unsupported files (txt, rtf, legacy doc)', async () => {

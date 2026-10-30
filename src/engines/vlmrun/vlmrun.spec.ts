@@ -155,7 +155,6 @@ describe('mapVlmRunResponse (assumed shape, see mapper header)', () => {
 
 describe('VlmRunEngine', () => {
   const req: EngineRequest = {
-    tenantId: 't1',
     documentId: 'd1',
     form: INSURANCE_CARD,
     schema: buildJsonSchema(INSURANCE_CARD).schema,

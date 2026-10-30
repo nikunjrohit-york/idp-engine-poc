@@ -16,14 +16,14 @@ export interface StoragePort {
   delete(key: string): Promise<void>;
 }
 
-/** Key layout from plan 02 §6, under STORAGE_PREFIX. Keys carry ids only, never file names. */
+/** Key layout under STORAGE_PREFIX. Keys carry ids only, never file names. */
 export const storageKeys = {
-  original: (t: string, d: string, ext: string) => `t/${t}/d/${d}/original.${ext}`,
+  original: (d: string, ext: string) => `d/${d}/original.${ext}`,
   /** Converted PDF (Word -> PDF); engines receive this instead of the original. */
-  normalized: (t: string, d: string) => `t/${t}/d/${d}/normalized.pdf`,
-  page: (t: string, d: string, n: number) => `t/${t}/d/${d}/pages/${n}.png`,
-  raw: (t: string, d: string, engine: string, extractionId: string) =>
-    `t/${t}/d/${d}/engine/${engine}/${extractionId}.json.gz`,
+  normalized: (d: string) => `d/${d}/normalized.pdf`,
+  page: (d: string, n: number) => `d/${d}/pages/${n}.png`,
+  raw: (d: string, engine: string, extractionId: string) =>
+    `d/${d}/engine/${engine}/${extractionId}.json.gz`,
 };
 
 export class LocalStorage implements StoragePort {

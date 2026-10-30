@@ -1,6 +1,6 @@
 // POC subset of the plan's data model (02-data-model.md) plus the EngineCall idea from
 // docs/research/vendors/shared-engine-adapter.md §7, folded into Extraction.
-// Every row carries tenantId; every query filters by it.
+// Single-tenant: rows are not scoped by a tenant id.
 
 generator client {
   provider     = "prisma-client"
@@ -21,7 +21,6 @@ enum ExtractionStatus {
 
 model Document {
   id          String       @id @default(uuid()) @db.Uuid
-  tenantId    String
   sha256             String
   mimeType           String // as uploaded (pdf, png, docx, ...)
   sizeBytes          Int
@@ -37,13 +36,12 @@ model Document {
   pages       Page[]
   extractions Extraction[]
 
-  @@unique([tenantId, sha256])
+  @@unique([sha256])
   @@map("idp_document")
 }
 
 model Page {
   id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String
   documentId String   @db.Uuid
   pageNumber Int
   storageKey String
@@ -59,7 +57,6 @@ model Page {
 /// One run of one engine over one document. Raw vendor output is stored (gzip JSON) and never changed.
 model Extraction {
   id           String           @id @default(uuid()) @db.Uuid
-  tenantId     String
   documentId   String           @db.Uuid
   engine       String // textract | vlmrun | meibel | fake
   formType     String
@@ -82,7 +79,7 @@ model Extraction {
   document     Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
   fields       ExtractedField[]
 
-  @@index([tenantId, requestHash])
+  @@index([requestHash])
   @@index([documentId])
   @@map("idp_extraction")
 }
@@ -90,7 +87,6 @@ model Extraction {
 /// EAV field row with provenance (page, bbox, confidence) and review flags.
 model ExtractedField {
   id               String     @id @default(uuid()) @db.Uuid
-  tenantId         String
   extractionId     String     @db.Uuid
   path             String // member.id | serviceLines[0].cptHcpcs | otherFields[3]
   label            String // definition label, or the printed caption for otherFields

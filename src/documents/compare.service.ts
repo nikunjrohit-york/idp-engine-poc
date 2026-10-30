@@ -15,12 +15,12 @@ export class CompareService {
     private readonly forms: FormRegistry,
   ) {}
 
-  async compare(tenantId: string, documentId: string, formType?: string) {
-    const doc = await this.prisma.document.findFirst({ where: { id: documentId, tenantId } });
+  async compare(documentId: string, formType?: string) {
+    const doc = await this.prisma.document.findFirst({ where: { id: documentId } });
     if (!doc) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
     const form = this.forms.get(formType ?? doc.formType);
     const runs = await this.prisma.extraction.findMany({
-      where: { tenantId, documentId, formType: form.id, status: 'SUCCEEDED' },
+      where: { documentId, formType: form.id, status: 'SUCCEEDED' },
       orderBy: { createdAt: 'desc' },
       include: { fields: true },
     });

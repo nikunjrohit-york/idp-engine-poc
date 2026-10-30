@@ -139,7 +139,6 @@ describe('MeibelEngine', () => {
       sleep: async () => undefined,
     });
     const result = await engine.extract({
-      tenantId: 't1',
       documentId: 'd1',
       form: INSURANCE_CARD,
       schema: buildJsonSchema(INSURANCE_CARD).schema,

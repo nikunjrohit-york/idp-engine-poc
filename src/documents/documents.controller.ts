@@ -15,7 +15,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { TenantId } from '../common/tenant.decorator';
 import { EngineRegistry } from '../engines/engine-registry';
 import { FormRegistry } from '../forms/form-registry';
 import { buildJsonSchema } from '../forms/json-schema.builder';
@@ -41,7 +40,6 @@ export class DocumentsController {
   @ApiBody({ schema: UPLOAD_BODY_SCHEMA })
   @UseInterceptors(FileInterceptor('file'))
   upload(
-    @TenantId() tenantId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() dto: UploadDocumentDto,
   ) {
@@ -50,33 +48,28 @@ export class DocumentsController {
         code: 'FILE_REQUIRED',
         message: 'multipart field "file" is required',
       });
-    return this.documents.upload(tenantId, file.buffer, dto.formType, dto.engines);
+    return this.documents.upload(file.buffer, dto.formType, dto.engines);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Document with all its extraction runs' })
-  get(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
-    return this.documents.getDocument(tenantId, id);
+  get(@Param('id', ParseUUIDPipe) id: string) {
+    return this.documents.getDocument(id);
   }
 
   @Get(':id/compare')
   @ApiOperation({ summary: 'Field-by-field comparison of the latest run per engine' })
-  compare(
-    @TenantId() tenantId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query() q: CompareQueryDto,
-  ) {
-    return this.compareService.compare(tenantId, id, q.formType);
+  compare(@Param('id', ParseUUIDPipe) id: string, @Query() q: CompareQueryDto) {
+    return this.compareService.compare(id, q.formType);
   }
 
   @Get(':id/pages/:n')
   @ApiOperation({ summary: 'Rasterized page PNG (for the review overlay)' })
   async page(
-    @TenantId() tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('n', ParseIntPipe) n: number,
   ): Promise<StreamableFile> {
-    const png = await this.documents.getPage(tenantId, id, n);
+    const png = await this.documents.getPage(id, n);
     return new StreamableFile(png, { type: 'image/png', disposition: 'inline' });
   }
 }
@@ -90,8 +83,8 @@ export class ExtractionsController {
   @ApiOperation({
     summary: 'One extraction run with field values, confidence, bbox and review flags',
   })
-  get(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
-    return this.documents.getExtraction(tenantId, id);
+  get(@Param('id', ParseUUIDPipe) id: string) {
+    return this.documents.getExtraction(id);
   }
 }
 

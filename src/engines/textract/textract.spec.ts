@@ -287,7 +287,6 @@ describe('planTextract', () => {
 
 describe('TextractEngine', () => {
   const request = (form = CMS1500, pages = 2): EngineRequest => ({
-    tenantId: 't1',
     documentId: 'd1',
     form,
     schema: buildJsonSchema(form).schema,

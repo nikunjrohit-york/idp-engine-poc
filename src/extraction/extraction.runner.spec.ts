@@ -9,14 +9,12 @@ describe('toRows', () => {
     toRows(
       form,
       await new FakeEngine().extract({
-        tenantId: 't',
         documentId: 'd',
         form,
         schema: buildJsonSchema(form).schema,
         document: { bytes: Buffer.alloc(0), mimeType: 'application/pdf', pageCount: 1 },
         pages: [],
       }),
-      't',
       'e',
       80,
     );
@@ -58,7 +56,6 @@ describe('toRows', () => {
         ],
         raw: {},
       },
-      't',
       'e',
       80,
     );

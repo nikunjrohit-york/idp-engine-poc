@@ -20,7 +20,6 @@ export interface BBox {
 }
 
 export interface EngineRequest {
-  tenantId: string;
   documentId: string;
   form: FormDefinition;
   /** JSON Schema built from `form` (schema engines send it; Textract ignores it). */

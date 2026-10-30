@@ -62,7 +62,6 @@ export class ExtractionRunner {
         ...doc.pages.map((p) => this.storage.get(p.storageKey)),
       ]);
       const result: EngineResult = await this.engines.get(ex.engine).extract({
-        tenantId: ex.tenantId,
         documentId: ex.documentId,
         form,
         schema,
@@ -74,10 +73,10 @@ export class ExtractionRunner {
         pages: doc.pages.map((p, i) => ({ pageNumber: p.pageNumber, bytes: pageBytes[i]! })),
       });
 
-      const rawKey = storageKeys.raw(ex.tenantId, ex.documentId, ex.engine, ex.id);
+      const rawKey = storageKeys.raw(ex.documentId, ex.engine, ex.id);
       await this.storage.put(rawKey, gzipSync(JSON.stringify(result.raw)), 'application/gzip');
 
-      const rows = toRows(form, result, ex.tenantId, ex.id, this.cfg.engines.defaultMinConfidence);
+      const rows = toRows(form, result, ex.id, this.cfg.engines.defaultMinConfidence);
       const needsReview = rows.some((r) => (r.flags as string[]).length > 0);
       const latencyMs = Date.now() - started;
       await this.prisma.$transaction([
@@ -133,7 +132,6 @@ export class ExtractionRunner {
 export function toRows(
   form: FormDefinition,
   result: EngineResult,
-  tenantId: string,
   extractionId: string,
   envMinConfidence: number,
 ): Prisma.ExtractedFieldCreateManyInput[] {
@@ -146,7 +144,6 @@ export function toRows(
     seen.add(f.path);
     const def = ref.kind === 'field' ? ref.def : ref.kind === 'group' ? ref.column : null;
     rows.push({
-      tenantId,
       extractionId,
       path: f.path,
       label: def?.label ?? (f.label ?? 'Unlabelled').slice(0, 300),

@@ -14,7 +14,7 @@ It is a proof of concept for decision **D14 (multi-engine)** from the plan repo 
 
 ```
 POST /v1/documents (file, formType?, engines?)
-  │  type from magic bytes + ZIP contents (never the file name) · sha256 dedupe per tenant
+  │  type from magic bytes + ZIP contents (never the file name) · sha256 dedupe
   ▼
 CONVERT    pdf / png / jpg / tiff ─ as is
            docx ─ pure-JS text PDF (paragraphs + tables + checkboxes; no system dependency)
@@ -112,7 +112,6 @@ Field keys:
 | Forms                 | `FormDefinition` (data, Zod-validated)            | built-in TS + JSON files               | `FORMS_DIR`                                                                |
 | Object storage        | `StoragePort`                                     | local, S3 (SSE-KMS)                    | `STORAGE_DRIVER`                                                           |
 | Execution             | `ExtractionDispatcher`                            | inline, BullMQ                         | `PIPELINE_MODE`, `APP_ROLE`                                                |
-| Tenant / auth         | `@TenantId()`                                     | fixed `demo` (header optional)         | host guard adapter                                                         |
 
 Schema engines (VLM Run, Meibel, fake) share one walker (`src/engines/schema-result.ts`) for scalars, rows and other values. Each adapter only supplies its provenance lookup. **A fifth engine** means:
 
@@ -140,8 +139,6 @@ curl -s -X POST localhost:3000/v1/documents -F file=@samples/booking-sheet.synth
 
 ## 5. API
 
-Requests do not need a tenant header. This POC stores every document under the tenant `demo`.
-
 | Method | Path                                          | What                                                                                                                                                                               |
 | ------ | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | POST   | `/v1/documents`                               | multipart `file`, optional `formType` (otherwise auto-detected), optional `engines`. Returns 202 with `documentId`, classification, and each extraction including `fields`, `groups`, `other`, `values` |
@@ -156,7 +153,7 @@ Requests do not need a tenant header. This POC stores every document under the t
 
 ```bash
 pnpm test        # 69 unit tests: no network, no DB
-pnpm test:e2e    # 10 e2e tests over HTTP on real Postgres with the fake engine
+pnpm test:e2e    # 9 e2e tests over HTTP on real Postgres with the fake engine
 pnpm lint && pnpm typecheck
 ```
 
@@ -167,7 +164,7 @@ What they cover:
 - **Textract (hand-built block graphs):** CMS-1500 box captions with one key per field, Box 24 and UB-04 tables, blank rows dropped, checkbox selection, unclaimed keys → otherFields, query batching, cost.
 - **VLM Run / Meibel:** privacy flags, auth headers, retries, rows with per-row metadata, the row cap, otherFields, bbox conversions.
 - **Forms:** Zod validation, FORMS_DIR loading and rejection, JSON Schema arrays, no example values in prompts, hash stability.
-- **e2e:** CMS-1500/UB-04 PDF and Word booking sheet auto-detected end to end, GENERIC, a JSON form, dedupe and reuse, compare, tenant isolation, 400/404/415 cases.
+- **e2e:** CMS-1500/UB-04 PDF and Word booking sheet auto-detected end to end, GENERIC, a JSON form, dedupe and reuse, compare, 400/404/415 cases.
 
 ## 7. Layout
 
@@ -182,7 +179,7 @@ src/
   extraction/      runner (rows + flags), dispatcher (sync | BullMQ), review flags
   documents/       controllers, DTOs, documents + compare services
   testing/         synthetic CMS-1500 / UB-04 / booking (PDF + DOCX) / card generators, zip writer
-prisma/            schema + 2 migrations (init, any_file_any_form)
+prisma/            schema + 3 migrations (init, any_file_any_form, drop_tenant_id)
 test/              e2e + fixtures/forms/referral.json
 ```
 
