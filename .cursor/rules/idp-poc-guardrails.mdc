@@ -1,0 +1,21 @@
+---
+description: Guardrails for the standalone IDP (Amazon Textract) POC project.
+alwaysApply: true
+---
+
+- This project is standalone. It lives in ~/Developer/Project/idp-poc with its own git repo.
+- The Delphi repos (Delphi_bundle_be, Delphi_bundle_fe, Delphi_bundle_infra) are READ-ONLY.
+  Never create, edit, move or delete files in them. Never import from them. Never copy
+  their secrets, env files or client names.
+- IaC is AWS CDK (TypeScript) inside idp-poc/infra, with its own cdk.json and its own app.
+  No Terraform. No CloudFormation by hand.
+- Package manager is pnpm. Node 24 (.nvmrc). Pin Prisma to 7.10.1 exactly (not latest).
+- NEVER run: cdk deploy, cdk destroy, prisma migrate deploy/reset against anything but the
+  local docker DB, or any aws command that creates/updates/deletes. I run those myself.
+- Allowed: reading files, pnpm install/test/build, cdk synth, cdk diff, local docker compose,
+  and read-only AWS CLI (describe/list/get) only when I say so.
+- Secrets: never write real values anywhere. .env.poc is git-ignored. Commit only
+  .env.poc.example with names and safe placeholders. No static AWS keys, use SSO profile.
+- Data: synthetic documents only. Refuse to run any script when PHI_MODE=true.
+- Do not invent account IDs, ARNs or resource names. Read them from env/config or CDK tokens.
+- Work phase by phase. At the end of each phase: summary, files changed, verify commands, STOP.

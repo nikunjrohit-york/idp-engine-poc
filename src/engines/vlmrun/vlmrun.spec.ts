@@ -54,6 +54,17 @@ describe('VlmRunClient', () => {
     });
   });
 
+  it('uploads the file without minting a public URL', async () => {
+    const fetchFn = vi.fn<FetchFn>().mockResolvedValue(json({ id: 'file-1' }));
+    await client(fetchFn).uploadFile(Buffer.from('%PDF-1.4'), 'document.pdf', 'application/pdf');
+    const [url, init] = fetchFn.mock.calls[0]!;
+    expect(String(url)).toBe('https://api.vlm.run/v1/files?generate_public_url=false');
+    expect(init?.method).toBe('POST');
+    const headers = init?.headers as Record<string, string>;
+    expect(headers.authorization).toBe('Bearer test-key-123');
+    expect(headers['content-type']).toBeUndefined();
+  });
+
   it('sends the bearer key and retries 429 honouring Retry-After', async () => {
     const fetchFn = vi
       .fn<FetchFn>()
@@ -167,7 +178,7 @@ describe('VlmRunEngine', () => {
     const fetchFn = vi.fn<FetchFn>(async (url, init) => {
       const u = String(url);
       calls.push(`${init?.method} ${u.replace('https://api.vlm.run', '')}`);
-      if (u.endsWith('/v1/files')) return json({ id: 'file-1' });
+      if (u.includes('/v1/files?')) return json({ id: 'file-1' });
       if (u.endsWith('/v1/document/generate')) return json({ id: 'pred-1', status: 'enqueued' });
       if (u.endsWith('/v1/predictions/pred-1')) {
         return json({
@@ -189,7 +200,7 @@ describe('VlmRunEngine', () => {
     });
     const result = await engine.extract(req);
     expect(calls).toEqual([
-      'POST /v1/files',
+      'POST /v1/files?generate_public_url=false',
       'POST /v1/document/generate',
       'GET /v1/predictions/pred-1',
       'DELETE /v1/files/file-1',
@@ -205,7 +216,7 @@ describe('VlmRunEngine', () => {
   it('deletes the remote file even when the prediction fails', async () => {
     const fetchFn = vi.fn<FetchFn>(async (url) => {
       const u = String(url);
-      if (u.endsWith('/v1/files')) return json({ id: 'file-1' });
+      if (u.includes('/v1/files?')) return json({ id: 'file-1' });
       if (u.endsWith('/v1/document/generate')) return json({ id: 'pred-1', status: 'failed' });
       return new Response(null, { status: 204 });
     });

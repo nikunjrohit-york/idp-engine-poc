@@ -35,7 +35,8 @@ export class VlmRunClient {
     form.append('file', blobOf(bytes, mimeType), filename);
     const res = await requestJson<{ id?: string; file_id?: string }>(
       this.http,
-      `${this.cfg.baseUrl}/v1/files`,
+      // Vendor default generate_public_url=true mints a world-readable link. Never do that.
+      `${this.cfg.baseUrl}/v1/files?generate_public_url=false`,
       {
         method: 'POST',
         headers: this.headers(),

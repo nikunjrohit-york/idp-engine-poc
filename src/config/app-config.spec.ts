@@ -39,6 +39,16 @@ describe('env validation (fail fast at boot)', () => {
     expect(() => loadAppConfig({ ...base, ENGINE_DEFAULT: 'textract' })).toThrow(/ENGINE_DEFAULT/);
   });
 
+  it('uses the VLM host whose certificate matches, including a stale api.vlm.run setting', () => {
+    expect(loadAppConfig(base).vlmrun.baseUrl).toBe('https://api.runvlm.com');
+    expect(
+      loadAppConfig({ ...base, VLMRUN_BASE_URL: 'https://api.vlm.run/' }).vlmrun.baseUrl,
+    ).toBe('https://api.runvlm.com');
+    expect(
+      loadAppConfig({ ...base, VLMRUN_BASE_URL: 'https://example.test/vlm/' }).vlmrun.baseUrl,
+    ).toBe('https://example.test/vlm');
+  });
+
   it('PHI_MODE gates: no fake engine, vendor BAA confirmed, S3 storage', () => {
     expect(() => loadAppConfig({ ...base, PHI_MODE: 'true' })).toThrow(/fake/);
     const vendor = {

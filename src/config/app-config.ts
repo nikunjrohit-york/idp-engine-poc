@@ -96,7 +96,7 @@ export const envSchema = Joi.object({
     is: enabled('vlmrun'),
     then: Joi.string().min(8).required(),
   }),
-  VLMRUN_BASE_URL: Joi.string().uri().default('https://api.vlm.run'),
+  VLMRUN_BASE_URL: Joi.string().uri().default('https://api.runvlm.com'),
   VLMRUN_MODEL: Joi.string().default('vlm-1'),
   VLMRUN_DETAIL: Joi.string().valid('lo', 'hi', 'auto').default('auto'),
   VLMRUN_POLL_MS: Joi.number().integer().min(250).default(2000),
@@ -143,6 +143,16 @@ export const envSchema = Joi.object({
   })
   .unknown(true);
 
+/**
+ * api.vlm.run still resolves, but the certificate served there is only for api.runvlm.com.
+ * Node fetch then throws ERR_TLS_CERT_ALTNAME_INVALID, which the HTTP client reports as NETWORK.
+ */
+export function normalizeVlmBaseUrl(raw: string): string {
+  const url = new URL(raw);
+  if (url.hostname === 'api.vlm.run') url.hostname = 'api.runvlm.com';
+  return url.toString().replace(/\/+$/, '');
+}
+
 /** Used by ConfigModule.forRoot({ validate }) so a bad env fails at boot. */
 export function validateEnv(raw: Record<string, unknown>): Record<string, unknown> {
   const { value, error } = envSchema.validate(raw, { abortEarly: false, convert: true });
@@ -184,7 +194,7 @@ export function loadAppConfig(raw: Record<string, unknown>): AppConfig {
     aws: { region: s('AWS_REGION'), textractMaxAttempts: n('TEXTRACT_MAX_ATTEMPTS') },
     vlmrun: {
       apiKey: opt('VLMRUN_API_KEY'),
-      baseUrl: s('VLMRUN_BASE_URL').replace(/\/+$/, ''),
+      baseUrl: normalizeVlmBaseUrl(s('VLMRUN_BASE_URL')),
       model: s('VLMRUN_MODEL'),
       detail: s('VLMRUN_DETAIL') as AppConfig['vlmrun']['detail'],
       pollMs: n('VLMRUN_POLL_MS'),
